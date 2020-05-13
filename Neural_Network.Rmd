@@ -1,0 +1,219 @@
+---
+title: "PesekMLProject"
+author: "Jordan Pesek"
+date: "3/10/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Preprocessing the Training Data, and Importing of Required Libraries
+
+```{r Data Pre-processing}
+library(caret)
+library(dplyr)
+library(keras)
+library(reticulate)
+use_python("/home/jordanpesek/miniconda3/bin/python")
+
+set.seed(100)
+#This data comes pre-processed of all NA values.
+trainX <- data.frame(read.csv("/home/jordanpesek/Downloads/train_values.csv"))
+trainY <- data.frame(read.csv("/home/jordanpesek/Downloads/train_labels.csv"))
+#Take out unnessacary data, such as ids and data that would not affect damage.
+trainX <- trainX %>% select(-building_id)
+                            # ,-has_secondary_use,-has_secondary_use_agriculture,-has_secondary_use_gov_office,
+                            # -has_secondary_use_health_post,-has_secondary_use_hotel,-has_secondary_use_industry,
+                            # -has_secondary_use_institution,-has_secondary_use_other,-has_secondary_use_rental,
+                            # -has_secondary_use_school,-has_secondary_use_use_police,-legal_ownership_status)
+    #Removal of the above data values led to a decrease in accuracies
+trainY <- trainY %>% select(damage_grade)
+#One hot encode the data
+dummyX <- dummyVars(~., data = trainX, levelsOnly = FALSE)
+#Normalize the data, and save the parameters for the test data
+realTrainX <- as.matrix(predict(dummyX, trainX))
+normParam <- preProcess(realTrainX)
+realTrainX <- predict(normParam, realTrainX)
+realTrainY <- as.matrix(to_categorical(as.matrix(trainY)))
+realTrainY <- realTrainY[,-1]
+```
+
+## Model 1, (the final model)
+
+```{r Model 1 Creation}
+model <- keras_model_sequential()
+model %>%
+  layer_dense(units = 48, activation = "tanh", input_shape = ncol(realTrainX), kernel_initializer ='glorot_normal') %>% 
+  layer_dropout(0.25) %>%
+  layer_dense(units = 36, activation = "tanh", kernel_initializer ='glorot_normal') %>% 
+  layer_dropout(0.25) %>%
+  layer_dense(units = 24, activation = "tanh", kernel_initializer ='glorot_normal') %>% 
+  layer_dropout(0.25) %>%
+  layer_dense(units = 12, activation = "tanh", kernel_initializer ='glorot_normal') %>% 
+  layer_dropout(0.25) %>%
+  layer_dense(units = 3, activation = "softmax", kernel_initializer ='glorot_normal') %>%
+  layer_activation(activation = "softmax")
+
+summary(model)
+```
+
+```{r Model 1 Compilation}
+model %>% compile(
+  loss = "categorical_crossentropy",
+  optimizer = optimizer_adam(),
+  metrics = c("accuracy")
+)
+```
+
+```{r Model 1 Fitting}
+history <- model %>% fit(
+  realTrainX, realTrainY, 
+  epochs = 20, batch_size = 256,
+  validation_split = 0.2,
+  callbacks = (callback_early_stopping(monitor = "val_loss", patience=2)),
+  shuffle=TRUE
+)
+plot(history)
+```
+
+## Preprocessing of the Testing Data
+
+```{r Evaulating Test data 1}
+testX <- data.frame(read.csv("/home/jordanpesek/Downloads/test_values.csv"))
+testX <- testX %>% select(-building_id)
+                          # ,-has_secondary_use,-has_secondary_use_agriculture,-has_secondary_use_gov_office,
+                          # -has_secondary_use_health_post,-has_secondary_use_hotel,-has_secondary_use_industry,
+                          # -has_secondary_use_institution,-has_secondary_use_other,-has_secondary_use_rental,
+                          # -has_secondary_use_school,-has_secondary_use_use_police,-legal_ownership_status)
+dummyTestX <- dummyVars(~., data = testX, levelsOnly = FALSE)
+realTestX <- as.matrix(predict(dummyTestX, testX))
+realTestX <- predict(normParam, realTestX)
+results <- model %>% predict_classes(as.matrix(realTestX))
+results <- results+1
+summary(results)
+#write.csv(results1, file = '/home/jordanpesek/Desktop/test_labels.csv')
+```
+
+## Model 2
+
+```{r Model 2 Creation}
+model2 <- keras_model_sequential()
+model2 %>%
+  layer_dense(units = 48, activation = "tanh", input_shape = ncol(realTrainX), kernel_initializer ='glorot_normal') %>% 
+  layer_dropout(0.25) %>%
+  layer_dense(units = 24, activation = "tanh", kernel_initializer ='glorot_normal') %>% 
+  layer_dropout(0.25) %>%
+  layer_dense(units = 3, activation = "tanh", kernel_initializer ='glorot_normal') %>%
+  layer_activation(activation = "softmax")
+
+summary(model2)
+```
+
+```{r Model 2 Compilation}
+model2 %>% compile(
+  loss = "categorical_crossentropy",
+  optimizer = optimizer_adam(),
+  metrics = c("accuracy")
+)
+```
+
+```{r Model 2 Fitting}
+history2 <- model2 %>% fit(
+  realTrainX, realTrainY, 
+  epochs = 20, batch_size = 256,
+  validation_split = 0.2,
+  callbacks = (callback_early_stopping(monitor = "val_loss", patience=2)),
+  shuffle=TRUE
+)
+plot(history2)
+```
+
+```{r Evaulating Test data 2}
+results2 <- model2 %>% predict_classes(as.matrix(realTestX))
+results2 <- results2+1
+summary(results2)
+#write.csv(results2, file = '/home/jordanpesek/Desktop/test_labels.csv')
+```
+
+## Model 3
+
+```{r Model 3 Creation}
+model3 <- keras_model_sequential()
+model3 %>%
+  layer_dense(units = 48, activation = "tanh", input_shape = ncol(realTrainX), kernel_initializer ='glorot_normal') %>% 
+  layer_dropout(0.25) %>%
+  layer_dense(units = 24, activation = "tanh", kernel_initializer ='glorot_normal') %>% 
+  layer_dropout(0.25) %>%
+  layer_dense(units = 3, activation = "softmax", kernel_initializer ='glorot_normal') %>%
+  layer_activation(activation = "softmax")
+
+summary(model3)
+```
+
+```{r Model 3 Compilation}
+model3 %>% compile(
+  loss = "categorical_crossentropy",
+  optimizer = optimizer_rmsprop(),
+  metrics = c("accuracy")
+)
+```
+
+```{r Model 3 Fitting}
+history3 <- model3 %>% fit(
+  realTrainX, realTrainY, 
+  epochs = 20, batch_size = 256,
+  validation_split = 0.2,
+  callbacks = (callback_early_stopping(monitor = "val_loss", patience=2)),
+  shuffle=TRUE
+)
+plot(history3)
+```
+
+```{r Evaulating Test data 3}
+results3 <- model3 %>% predict_classes(as.matrix(realTestX))
+results3 <- results3+1
+summary(results3)
+#write.csv(results3, file = '/home/jordanpesek/Desktop/test_labels.csv')
+```
+
+## Model 4
+
+```{r Model 4 Creation}
+model4 <- keras_model_sequential()
+model4 %>%
+  layer_dense(units = 10, activation = "tanh", input_shape = ncol(realTrainX), kernel_initializer ='glorot_normal') %>% 
+  layer_dense(units = 3, activation = "tanh", kernel_initializer ='glorot_normal') %>%
+  layer_activation(activation = "softmax")
+
+summary(model4)
+```
+
+```{r Model 4 Compilation}
+model4 %>% compile(
+  loss = "categorical_crossentropy",
+  optimizer = optimizer_sgd(),
+  metrics = c("accuracy")
+)
+```
+
+```{r Model 4 Fitting}
+history4 <- model4 %>% fit(
+  realTrainX, realTrainY, 
+  epochs = 20, batch_size = 128,
+  validation_split = 0.2,
+  callbacks = (callback_early_stopping(monitor = "val_loss", patience=2)),
+  shuffle=TRUE
+)
+plot(history4)
+```
+
+```{r Evaulating Test data 4}
+results4 <- model4 %>% predict_classes(as.matrix(realTestX))
+results4 <- results4+1
+summary(results4)
+#write.csv(results, file = '/home/jordanpesek/Desktop/test_labels.csv')
+```
